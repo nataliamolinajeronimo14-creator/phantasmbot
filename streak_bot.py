@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import ssl
 import time
 import urllib.parse
 import urllib.request
@@ -501,11 +502,35 @@ async def main():
         )
     templates = load_streak_templates(STREAK_FILE)
 
-    try:
-        reader, writer = await asyncio.open_connection("irc.chat.twitch.tv", 6667)
-    except Exception as exc:
-        logger.exception("Fallo al conectar a Twitch IRC: %s", exc)
-        raise
+    ssl_context = ssl.create_default_context()
+    connection_attempts = [
+        ("irc.chat.twitch.tv", 6667, False),
+        ("irc.chat.twitch.tv", 6697, True),
+    ]
+    reader = writer = None
+    last_exception = None
+
+    for host, port, use_ssl in connection_attempts:
+        try:
+            if use_ssl:
+                reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+            else:
+                reader, writer = await asyncio.open_connection(host, port)
+            logger.info("Conectado a Twitch IRC en %s:%s (SSL=%s)", host, port, use_ssl)
+            break
+        except Exception as exc:
+            last_exception = exc
+            logger.warning(
+                "No se pudo conectar a Twitch IRC en %s:%s (SSL=%s): %s",
+                host,
+                port,
+                use_ssl,
+                exc,
+            )
+
+    if reader is None or writer is None:
+        logger.exception("Fallo al conectar a Twitch IRC tras varios intentos: %s", last_exception)
+        raise last_exception
 
     await send_irc_line(writer, f"PASS {TWITCH_OAUTH_TOKEN}")
     await send_irc_line(writer, f"NICK {TWITCH_USER}")
