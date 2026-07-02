@@ -24,7 +24,7 @@ if "#" in SUMMONER_NAME_RAW:
 else:
     SUMMONER_NAME = SUMMONER_NAME_RAW
  
-REGION = os.getenv("REGION", "EUW1")
+REGION = os.getenv("REGION", "europe")
 SLEEP_IN_GAME = int(os.getenv("SLEEP_IN_GAME", "10"))
 SLEEP_OUT_GAME = int(os.getenv("SLEEP_OUT_GAME", "5"))
 GLOBAL_CD_SECONDS = 2
