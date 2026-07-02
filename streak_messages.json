@@ -1,0 +1,39 @@
+{
+  "streak_break": {
+    "win_broken": "💀 Win streak of {streak} broken! 💀",
+    "lose_broken": "🔥 Lose streak of {streak} broken! 🔥"
+  },
+  "win_streak": {
+    "3": "🔥 ON FIRE (3W) awoo awoo awoo",
+    "4": "🔥 4 WINS IN A ROW woof woof",
+    "5": "🔥 5 WINS (IMPARABLE) CatTime ",
+    "6": "🔥 6 WINS wtf 🔝",
+    "7": "🔥 7 WINS (SMURF DETECTED) ErmActually  🔝",
+    "8": "🔥 8 WINS (THE BIG MONSTER) tuh 🔝",
+    "9": "🔥 9 WINS (INHUMANO) clappi  🔝",
+    "10": "🔥 10 WINS (DIOS) ShinWIN",
+    "11": "🔥 11 WINS (NO FALLA) dog 🔝",
+    "12": "🔥 12 WINS (MODO DIABLO) irelia 🔝",
+    "13": "🔥 13 WINS (ESTÁ ROTO) Dance 🔝",
+    "14": "🔥 14 WINS (NO ES NORMAL) dickface 🔝",
+    "15": "🔥 15 WINS (DESTRUIDO) :33 🔝",
+    "16": "🔥 16 WINS (LOBBY DIFF) agurinthuglife 🔝",
+    "17": "🔥 17 WINS (SIN SENTIDO) BOOMIES 🔝",
+    "18": "🔥 18 WINS (HACK?) sendoKUM 🔝",
+    "19": "🔥 19 WINS (ESTO ES ILEGAL) NERD 🔝",
+    "20+": "🔥 {streak} WINS SEGUIDAS (LEYENDA) WIDESEXO 🔝"
+  },
+  "lose_streak": {
+    "2": "💀 TILT Alarm 🔪",
+    "3": "💀 3 LOSSES... care beesad ",   
+    "4": "💀 4 LOSSES... FF mental Akshan 🔪",
+    "5": "💀 5 LOSSES... desastre ShinBOW 🔪",
+    "6": "💀 6 LOSSES... se acabó classic 🔪",
+    "7": "💀 7 LOSSES... no es tu día classique 🔪",
+    "8": "💀 8 LOSSES... Hermano no te rindes? HAH 🔪",
+    "9": "💀 9 LOSSES... yo que tú leería un libro... XD 🔪",
+    "10": "💀 10 mega-LOSSES... Y todabía sigues xdding 🔪",
+    "11": "💀 11 LOSSES... no es tu día Oops 🔪",
+    "12+": "💀 {streak} LOSSES... APAGA Y VETE :0 🔪"
+  }
+}
