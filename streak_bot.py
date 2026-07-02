@@ -17,7 +17,7 @@ TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny
 TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__").lstrip("#")
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "gp762nuuoqcoxypju8c569th9wz7q5")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
-SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantams#TWTV0")
+SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm#TWTV0")
 SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#TWTV0")
 if "#" in SUMMONER_NAME_RAW:
     SUMMONER_NAME, SUMMONER_TAG = SUMMONER_NAME_RAW.split("#", 1)
@@ -173,7 +173,10 @@ async def fetch_json(url: str, headers=None):
 
 
 async def send_irc_line(writer, line: str):
-    writer.write(f"{line}\r\n".encode("utf-8"))
+    data = f"{line}\r\n".encode("utf-8")
+    result = writer.write(data)
+    if asyncio.iscoroutine(result):
+        await result
     await writer.drain()
 
 
@@ -466,7 +469,13 @@ async def fetch_summoner(platform, headers):
     url = f"https://{platform}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{encoded_name}"
     try:
         return await fetch_json(url, headers)
-    except Exception:
+    except Exception as exc:
+        logger.exception(
+            "Error al buscar invocador Riot %s en %s: %s",
+            SUMMONER_NAME,
+            platform,
+            exc,
+        )
         return None
 
 
