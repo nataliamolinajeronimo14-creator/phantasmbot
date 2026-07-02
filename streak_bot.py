@@ -5,15 +5,16 @@ import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
+import logging
 
 # Configuración básica: actualiza estos valores o exporta variables de entorno.
-TWITCH_USER = os.getenv("TWITCH_USER", "nophantasm")
+TWITCH_USER = os.getenv("TWITCH_USER", "NoPhantasm")
 TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny4a0nhpmfy0")
-TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "gp762nuuoqcoxypju8c569th9wz7q5")
 TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__").lstrip("#")
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "gp762nuuoqcoxypju8c569th9wz7q5")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
-SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm#TWTV0")
-SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#TWTV1")
+SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phanta")
+SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#107")
 if "#" in SUMMONER_NAME_RAW:
     SUMMONER_NAME, SUMMONER_TAG = SUMMONER_NAME_RAW.split("#", 1)
 else:
@@ -77,6 +78,15 @@ class BotState:
         # Fallback si no hay template personalizado
         suffix = "W" if self.current_streak_type == "win" else "L"
         return f"Current streak: {self.current_streak_count}{suffix}"
+
+
+# Configuración del logger
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger("streak_bot")
 
 
 def load_streak_templates(path: Path):
@@ -163,6 +173,7 @@ async def send_irc_line(writer, line: str):
 
 
 async def send_chat_message(writer, channel: str, message: str):
+    logger.info("Enviando mensaje al chat #%s: %s", channel, message)
     await send_irc_line(writer, f"PRIVMSG #{channel} :{message}")
 
 
@@ -171,6 +182,7 @@ async def handle_privmsg(state: BotState, nick: str, message: str):
     lower_msg = message.strip().lower()
 
     if lower_msg.startswith("!streak"):
+        logger.info("Comando !streak recibido de %s", nick)
         now = time.monotonic()
         if now - state.last_streak_command_time < GLOBAL_CD_SECONDS:
             return
@@ -191,6 +203,7 @@ async def handle_privmsg(state: BotState, nick: str, message: str):
             return
 
         state.pending_louis_event = {"result": result, "seen_at": time.monotonic()}
+        logger.info("Evento Louis detectado: %s", result)
         await try_send_pending_streak(state)
 
 
@@ -243,8 +256,10 @@ async def riot_poll_loop(state: BotState, templates):
     routing = get_routing_region(platform)
     headers = {"X-Riot-Token": RIOT_API_KEY}
 
+    logger.info("Iniciando monitor Riot para %s en %s", SUMMONER_NAME, platform)
     summoner = await fetch_summoner(platform, headers)
     if summoner is None:
+        logger.error("No se pudo cargar el invocador de Riot. Verifica REGION, SUMMONER_NAME y RIOT_API_KEY.")
         raise RuntimeError("No se pudo cargar el invocador de Riot. Verifica REGION, SUMMONER_NAME y RIOT_API_KEY.")
 
     summoner_id = summoner["id"]
@@ -256,6 +271,7 @@ async def riot_poll_loop(state: BotState, templates):
     while True:
         active_game = await fetch_active_game(platform, summoner_id, headers)
         if active_game is not None:
+            logger.debug("Invocador está en partida activa")
             last_seen_in_game = True
             await try_send_pending_streak(state)
             await asyncio.sleep(SLEEP_IN_GAME)
@@ -276,6 +292,7 @@ async def riot_poll_loop(state: BotState, templates):
                 result = match_info["result"]
                 has_lp_change = await match_has_lp_change(state, platform, summoner_id, headers, queue_id)
                 state.last_match_id = match_id
+                logger.info("Partida finalizada %s resultado=%s lp_change=%s", match_id, result, has_lp_change)
                 if not has_lp_change:
                     await asyncio.sleep(SLEEP_OUT_GAME)
                     continue
@@ -297,6 +314,7 @@ async def riot_poll_loop(state: BotState, templates):
                     "force_send": False,
                     "send_after": time.monotonic() + PENDING_SEND_TIMEOUT,
                 }
+                logger.info("Resultado encolado para enviar: %s (se enviará tras %s s)", match_id, PENDING_SEND_TIMEOUT)
                 await try_send_pending_streak(state)
         await asyncio.sleep(SLEEP_OUT_GAME)
 
@@ -457,18 +475,21 @@ async def read_chat_loop(reader, writer, state: BotState):
             break
         line = line.decode("utf-8", errors="ignore").rstrip()
         if line.startswith("PING"):
+            logger.debug("PING recibido del servidor Twitch, respondiendo PONG")
             await send_irc_line(writer, line.replace("PING", "PONG"))
             continue
 
         match = CHAT_RE.match(line)
         if match:
             nick, message = match.groups()
+            logger.debug("Mensaje de chat de %s: %s", nick, message)
             await handle_privmsg(state, nick, message)
 
 
 async def write_chat_loop(writer, channel, state: BotState):
     while True:
         message = await state.chat_send_queue.get()
+        logger.debug("Preparando envío de mensaje al chat: %s", message)
         await send_chat_message(writer, channel, message)
         await asyncio.sleep(1)
 
@@ -480,10 +501,16 @@ async def main():
         )
     templates = load_streak_templates(STREAK_FILE)
 
-    reader, writer = await asyncio.open_connection("irc.chat.twitch.tv", 6667)
+    try:
+        reader, writer = await asyncio.open_connection("irc.chat.twitch.tv", 6667)
+    except Exception as exc:
+        logger.exception("Fallo al conectar a Twitch IRC: %s", exc)
+        raise
+
     await send_irc_line(writer, f"PASS {TWITCH_OAUTH_TOKEN}")
     await send_irc_line(writer, f"NICK {TWITCH_USER}")
     await send_irc_line(writer, f"JOIN #{TWITCH_CHANNEL}")
+    logger.info("Conectado a Twitch IRC como %s y unido al canal #%s", TWITCH_USER, TWITCH_CHANNEL)
 
     state = BotState(templates)
     state.chat_send_queue.put_nowait("Bot conectado y listo para rastrear rachas.")
@@ -494,7 +521,12 @@ async def main():
         asyncio.create_task(riot_poll_loop(state, templates)),
     ]
 
-    await asyncio.gather(*tasks)
+    logger.info("Iniciando tareas del bot")
+    try:
+        await asyncio.gather(*tasks)
+    except Exception:
+        logger.exception("Error en las tareas del bot")
+        raise
 
 
 if __name__ == "__main__":
