@@ -11,7 +11,7 @@ TWITCH_USER = os.getenv("TWITCH_USER", "NoPhantasm")
 TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny4a0nhpmfy0")
 TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
-SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm")
+SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm#TWTV1")
 SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#TWTV1")
 if "#" in SUMMONER_NAME_RAW:
     SUMMONER_NAME, SUMMONER_TAG = SUMMONER_NAME_RAW.split("#", 1)
