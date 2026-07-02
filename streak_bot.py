@@ -11,10 +11,10 @@ import logging
 # Configuración básica: actualiza estos valores o exporta variables de entorno.
 TWITCH_USER = os.getenv("TWITCH_USER", "NoPhantasm")
 TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny4a0nhpmfy0")
-TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Ruben_IRPG").lstrip("#")
+TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__").lstrip("#")
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "gp762nuuoqcoxypju8c569th9wz7q5")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
-SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm#TWTV0")
+SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantams#TWTV0")
 SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#TWTV0")
 if "#" in SUMMONER_NAME_RAW:
     SUMMONER_NAME, SUMMONER_TAG = SUMMONER_NAME_RAW.split("#", 1)
@@ -25,6 +25,7 @@ SLEEP_IN_GAME = int(os.getenv("SLEEP_IN_GAME", "10"))
 SLEEP_OUT_GAME = int(os.getenv("SLEEP_OUT_GAME", "5"))
 GLOBAL_CD_SECONDS = 2
 PENDING_SEND_TIMEOUT = int(os.getenv("PENDING_SEND_TIMEOUT", "10"))
+CONNECTION_TIMEOUT = int(os.getenv("CONNECTION_TIMEOUT", "15"))
 STREAK_FILE = Path(__file__).with_name("streak_messages.json")
 LOUIS_BOT_NAMES = {"louisgamedev"}
 RANKED_QUEUE_IDS = {420, 440}
@@ -511,13 +512,24 @@ async def main():
     last_exception = None
 
     for host, port, use_ssl in connection_attempts:
+        logger.info("Intentando conectar a Twitch IRC en %s:%s (SSL=%s)", host, port, use_ssl)
         try:
             if use_ssl:
-                reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+                connect_coro = asyncio.open_connection(host, port, ssl=ssl_context)
             else:
-                reader, writer = await asyncio.open_connection(host, port)
+                connect_coro = asyncio.open_connection(host, port)
+            reader, writer = await asyncio.wait_for(connect_coro, timeout=CONNECTION_TIMEOUT)
             logger.info("Conectado a Twitch IRC en %s:%s (SSL=%s)", host, port, use_ssl)
             break
+        except asyncio.TimeoutError as exc:
+            last_exception = exc
+            logger.warning(
+                "Tiempo de espera agotado al conectar a Twitch IRC en %s:%s (SSL=%s) tras %s s",
+                host,
+                port,
+                use_ssl,
+                CONNECTION_TIMEOUT,
+            )
         except Exception as exc:
             last_exception = exc
             logger.warning(
