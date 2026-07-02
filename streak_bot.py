@@ -1,7 +1,10 @@
 import asyncio
+import base64
+import hashlib
 import os
 import re
 import ssl
+import struct
 import time
 import urllib.parse
 import urllib.request
@@ -172,6 +175,143 @@ async def fetch_json(url: str, headers=None):
 async def send_irc_line(writer, line: str):
     writer.write(f"{line}\r\n".encode("utf-8"))
     await writer.drain()
+
+
+def _make_websocket_key():
+    return base64.b64encode(os.urandom(16)).decode("ascii")
+
+
+def _mask_payload(payload: bytes, mask: bytes) -> bytes:
+    return bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+
+
+class WebsocketIRCWriter:
+    def __init__(self, writer):
+        self._writer = writer
+
+    async def write(self, data):
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        payload_len = len(data)
+        header = bytearray([0x81])
+        if payload_len < 126:
+            header.append(0x80 | payload_len)
+        elif payload_len < (1 << 16):
+            header.append(0x80 | 126)
+            header.extend(struct.pack("!H", payload_len))
+        else:
+            header.append(0x80 | 127)
+            header.extend(struct.pack("!Q", payload_len))
+        mask_key = os.urandom(4)
+        header.extend(mask_key)
+        self._writer.write(header + _mask_payload(data, mask_key))
+        await self._writer.drain()
+
+    async def drain(self):
+        await self._writer.drain()
+
+
+class WebsocketIRCReader:
+    def __init__(self, reader, writer):
+        self._reader = reader
+        self._writer = writer
+        self._buffer = bytearray()
+
+    def at_eof(self):
+        return self._reader.at_eof() and not self._buffer
+
+    async def readline(self):
+        while True:
+            if b"\n" in self._buffer:
+                line, sep, rest = self._buffer.partition(b"\n")
+                self._buffer = rest
+                return line + sep
+            chunk = await self._read_message()
+            if not chunk:
+                return b""
+            self._buffer.extend(chunk)
+
+    async def _read_message(self):
+        header = await self._reader.readexactly(2)
+        b1, b2 = header[0], header[1]
+        opcode = b1 & 0x0F
+        masked = b2 >> 7
+        payload_len = b2 & 0x7F
+        if payload_len == 126:
+            ext = await self._reader.readexactly(2)
+            payload_len = struct.unpack("!H", ext)[0]
+        elif payload_len == 127:
+            ext = await self._reader.readexactly(8)
+            payload_len = struct.unpack("!Q", ext)[0]
+        mask_key = await self._reader.readexactly(4) if masked else None
+        payload = await self._reader.readexactly(payload_len) if payload_len else b""
+        if masked and mask_key:
+            payload = _mask_payload(payload, mask_key)
+        if opcode == 0x8:
+            return b""
+        if opcode == 0x9:
+            await self._send_pong(payload)
+            return b""
+        if opcode == 0xA:
+            return b""
+        if opcode == 0x1:
+            return payload
+        return b""
+
+    async def _send_pong(self, payload: bytes):
+        header = bytearray([0x8A])
+        payload_len = len(payload)
+        if payload_len < 126:
+            header.append(0x80 | payload_len)
+        elif payload_len < (1 << 16):
+            header.append(0x80 | 126)
+            header.extend(struct.pack("!H", payload_len))
+        else:
+            header.append(0x80 | 127)
+            header.extend(struct.pack("!Q", payload_len))
+        mask_key = os.urandom(4)
+        header.extend(mask_key)
+        self._writer.write(header + _mask_payload(payload, mask_key))
+        await self._writer.drain()
+
+
+async def open_twitch_websocket(host, port, ssl_context):
+    reader, writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+    websocket_key = _make_websocket_key()
+    handshake = (
+        f"GET / HTTP/1.1\r\n"
+        f"Host: {host}:{port}\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {websocket_key}\r\n"
+        "Sec-WebSocket-Version: 13\r\n"
+        "Origin: https://twitch.tv\r\n"
+        "User-Agent: Python/3\r\n"
+        "\r\n"
+    ).encode("utf-8")
+    writer.write(handshake)
+    await writer.drain()
+    response = await reader.readuntil(b"\r\n\r\n")
+    if not response.startswith(b"HTTP/1.1 101"):
+        raise ConnectionError(
+            f"WebSocket handshake failed: {response.splitlines()[0].decode('ascii', 'ignore')}"
+        )
+    lines = response.decode("ascii", "ignore").splitlines()
+    accept_line = next(
+        (line for line in lines if line.lower().startswith("sec-websocket-accept:")),
+        None,
+    )
+    if accept_line is None:
+        raise ConnectionError("WebSocket handshake missing Sec-WebSocket-Accept header")
+    accept_value = accept_line.split(":", 1)[1].strip()
+    expected = base64.b64encode(
+        hashlib.sha1(
+            (websocket_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")
+        ).digest()
+    ).decode("ascii")
+    if accept_value != expected:
+        raise ConnectionError("WebSocket handshake Sec-WebSocket-Accept mismatch")
+    return WebsocketIRCReader(reader, writer), WebsocketIRCWriter(writer)
 
 
 async def send_chat_message(writer, channel: str, message: str):
@@ -505,44 +645,68 @@ async def main():
 
     ssl_context = ssl.create_default_context()
     connection_attempts = [
-        ("irc.chat.twitch.tv", 6667, False),
-        ("irc.chat.twitch.tv", 6697, True),
+        ("irc.chat.twitch.tv", 6667, False, False),
+        ("irc.chat.twitch.tv", 6697, True, False),
+        ("irc-ws.chat.twitch.tv", 443, True, True),
     ]
     reader = writer = None
     last_exception = None
 
-    for host, port, use_ssl in connection_attempts:
-        logger.info("Intentando conectar a Twitch IRC en %s:%s (SSL=%s)", host, port, use_ssl)
+    for host, port, use_ssl, use_websocket in connection_attempts:
+        logger.info(
+            "Intentando conectar a Twitch IRC en %s:%s (SSL=%s, websocket=%s)",
+            host,
+            port,
+            use_ssl,
+            use_websocket,
+        )
         try:
-            if use_ssl:
+            if use_websocket:
+                connect_coro = open_twitch_websocket(host, port, ssl_context)
+            elif use_ssl:
                 connect_coro = asyncio.open_connection(host, port, ssl=ssl_context)
             else:
                 connect_coro = asyncio.open_connection(host, port)
             reader, writer = await asyncio.wait_for(connect_coro, timeout=CONNECTION_TIMEOUT)
-            logger.info("Conectado a Twitch IRC en %s:%s (SSL=%s)", host, port, use_ssl)
+            logger.info(
+                "Conectado a Twitch IRC en %s:%s (SSL=%s, websocket=%s)",
+                host,
+                port,
+                use_ssl,
+                use_websocket,
+            )
             break
         except asyncio.TimeoutError as exc:
             last_exception = exc
             logger.warning(
-                "Tiempo de espera agotado al conectar a Twitch IRC en %s:%s (SSL=%s) tras %s s",
+                "Tiempo de espera agotado al conectar a Twitch IRC en %s:%s (SSL=%s, websocket=%s) tras %s s",
                 host,
                 port,
                 use_ssl,
+                use_websocket,
                 CONNECTION_TIMEOUT,
             )
         except Exception as exc:
             last_exception = exc
             logger.warning(
-                "No se pudo conectar a Twitch IRC en %s:%s (SSL=%s): %s",
+                "No se pudo conectar a Twitch IRC en %s:%s (SSL=%s, websocket=%s): %s",
                 host,
                 port,
                 use_ssl,
+                use_websocket,
                 exc,
             )
 
     if reader is None or writer is None:
-        logger.exception("Fallo al conectar a Twitch IRC tras varios intentos: %s", last_exception)
-        raise last_exception
+        if last_exception is not None:
+            logger.error(
+                "Fallo al conectar a Twitch IRC tras varios intentos: %s",
+                last_exception,
+                exc_info=last_exception,
+            )
+        else:
+            logger.error("Fallo al conectar a Twitch IRC tras varios intentos: sin excepción disponible")
+        raise last_exception or RuntimeError("Fallo al conectar a Twitch IRC tras varios intentos")
 
     await send_irc_line(writer, f"PASS {TWITCH_OAUTH_TOKEN}")
     await send_irc_line(writer, f"NICK {TWITCH_USER}")
