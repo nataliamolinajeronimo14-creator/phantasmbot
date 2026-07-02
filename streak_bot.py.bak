@@ -94,11 +94,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("streak_bot")
 
-try:
-    masked = "<empty>" if not RIOT_API_KEY else (RIOT_API_KEY[:6] + "..." + RIOT_API_KEY[-4:])
-except Exception:
-    masked = "<error>"
-logger.info("RIOT_API_KEY present: %s", masked)
 
 def load_streak_templates(path: Path):
     if not path.exists():
@@ -408,23 +403,13 @@ def build_streak_messages(templates, previous_type, previous_count, result):
 async def riot_poll_loop(state: BotState, templates):
     platform = REGION.lower()
     routing = get_routing_region(platform)
-    headers = {"X-Riot-Token": RIOT_API_KEY, "User-Agent": "streak_bot/1.0"}
+    headers = {"X-Riot-Token": RIOT_API_KEY}
 
     logger.info("Iniciando monitor Riot para %s en %s", SUMMONER_NAME, platform)
-
-    # Intentamos cargar el invocador y, si falla (por clave vacía o error temporal), reintentamos periódicamente
     summoner = await fetch_summoner(platform, headers)
-    while summoner is None:
-        try:
-            masked = "<empty>" if not RIOT_API_KEY else (RIOT_API_KEY[:6] + "..." + RIOT_API_KEY[-4:])
-        except Exception:
-            masked = "<error>"
-        logger.error(
-            "No se pudo cargar el invocador de Riot (verifica REGION, SUMMONER_NAME y RIOT_API_KEY). RIOT_API_KEY present=%s. Reintentando en 60s",
-            masked,
-        )
-        await asyncio.sleep(60)
-        summoner = await fetch_summoner(platform, headers)
+    if summoner is None:
+        logger.error("No se pudo cargar el invocador de Riot. Verifica REGION, SUMMONER_NAME y RIOT_API_KEY.")
+        raise RuntimeError("No se pudo cargar el invocador de Riot. Verifica REGION, SUMMONER_NAME y RIOT_API_KEY.")
 
     summoner_id = summoner["id"]
     puuid = summoner["puuid"]
