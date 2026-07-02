@@ -11,7 +11,7 @@ TWITCH_USER = os.getenv("TWITCH_USER", "NoPhantasm")
 TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny4a0nhpmfy0")
 TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__").lstrip("#")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
-SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phanta#107")
+SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phanta")
 SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#107")
 if "#" in SUMMONER_NAME_RAW:
     SUMMONER_NAME, SUMMONER_TAG = SUMMONER_NAME_RAW.split("#", 1)
@@ -22,7 +22,7 @@ SLEEP_IN_GAME = int(os.getenv("SLEEP_IN_GAME", "10"))
 SLEEP_OUT_GAME = int(os.getenv("SLEEP_OUT_GAME", "5"))
 GLOBAL_CD_SECONDS = 2
 PENDING_SEND_TIMEOUT = int(os.getenv("PENDING_SEND_TIMEOUT", "10"))
-STREAK_FILE = Path(__file__).with_name("streak.messages.txt")
+STREAK_FILE = Path(__file__).with_name("streak_messages.json")
 LOUIS_BOT_NAMES = {"louisgamedev"}
 RANKED_QUEUE_IDS = {420, 440}
 QUEUE_TYPE_TO_ID = {
@@ -72,6 +72,14 @@ def load_streak_templates(path: Path):
     if not path.exists():
         raise FileNotFoundError(f"No se encontró {path}")
 
+    if path.suffix.lower() == ".json":
+        import json
+
+        templates = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(templates, dict):
+            raise ValueError(f"Formato JSON inválido en {path}")
+        return templates
+
     templates = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -80,23 +88,36 @@ def load_streak_templates(path: Path):
         if "=" not in line:
             continue
         key, _, value = line.partition("=")
-        templates[key.strip()] = value.strip()
+        current = templates
+        key_parts = key.strip().split(".")
+        for part in key_parts[:-1]:
+            current = current.setdefault(part, {})
+        current[key_parts[-1]] = value.strip()
     return templates
 
 
+def get_template(templates, key):
+    current = templates
+    for part in key.split('.'):
+        if not isinstance(current, dict):
+            return None
+        current = current.get(part)
+    return current if isinstance(current, str) else None
+
+
 def choose_template(templates, category, streak):
-    exact_key = f"{category}.{streak}"
-    if exact_key in templates:
-        return templates[exact_key]
+    exact = get_template(templates, f"{category}.{streak}")
+    if exact is not None:
+        return exact
 
     if streak >= 20:
-        fallback_key = f"{category}.20+"
-        if fallback_key in templates:
-            return templates[fallback_key].replace("{streak}", str(streak))
+        fallback = get_template(templates, f"{category}.20+")
+        if fallback is not None:
+            return fallback.replace("{streak}", str(streak))
 
-    fallback_key = f"{category}.1"
-    if fallback_key in templates:
-        return templates[fallback_key].replace("{streak}", str(streak))
+    fallback = get_template(templates, f"{category}.1")
+    if fallback is not None:
+        return fallback.replace("{streak}", str(streak))
 
     return None
 
