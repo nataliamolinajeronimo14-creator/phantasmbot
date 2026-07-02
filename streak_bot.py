@@ -7,9 +7,10 @@ import urllib.request
 from pathlib import Path
 
 # Configuración básica: actualiza estos valores o exporta variables de entorno.
-TWITCH_USER = os.getenv("TWITCH_USER", "NoPhantasm")
+TWITCH_USER = os.getenv("TWITCH_USER", "nophantasm")
 TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny4a0nhpmfy0")
-TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__")
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "gp762nuuoqcoxypju8c569th9wz7q5")
+TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__").lstrip("#")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
 SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm#TWTV1")
 SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#TWTV1")
