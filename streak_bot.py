@@ -16,7 +16,7 @@ TWITCH_USER = os.getenv("TWITCH_USER", "NoPhantasm")
 TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny4a0nhpmfy0")
 TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "RubenIRPG").lstrip("#")
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "gp762nuuoqcoxypju8c569th9wz7q5")
-RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
+RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-65858c3a-2c9d-4d43-972c-1f1a92db56d6")
 SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm#TWTV0")
 SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#TWTV0")
 if "#" in SUMMONER_NAME_RAW:
