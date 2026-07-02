@@ -8,6 +8,7 @@ import struct
 import time
 import urllib.parse
 import urllib.request
+import http.client
 from pathlib import Path
 import logging
 
@@ -168,9 +169,17 @@ def get_routing_region(platform: str):
 
 def http_get_json(url: str, headers=None):
     request = urllib.request.Request(url, headers=headers or {})
-    with urllib.request.urlopen(request, timeout=15) as response:
-        content = response.read().decode("utf-8")
-        return http_parse_json(content)
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            content = response.read().decode("utf-8")
+            return http_parse_json(content)
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read().decode("utf-8", errors="ignore")
+        except Exception:
+            body = "<no body>"
+        logger.error("HTTPError fetching %s: code=%s body=%s", url, getattr(e, 'code', None), body)
+        raise
 
 
 def http_parse_json(text: str):
@@ -412,6 +421,33 @@ async def riot_poll_loop(state: BotState, templates):
 
     logger.info("Iniciando monitor Riot para %s en %s", SUMMONER_NAME, platform)
 
+    # Diagnostic: perform low-level HTTPS request and log full response for debugging Riot 403
+    def _diagnostic_summoner_call():
+        try:
+            conn = http.client.HTTPSConnection(f"{platform}.api.riotgames.com", timeout=15)
+            path = f"/lol/summoner/v4/summoners/by-name/{urllib.parse.quote(SUMMONER_NAME)}"
+            # Build headers copy with masked token for logs
+            send_headers = dict(headers)
+            try:
+                token = send_headers.get('X-Riot-Token', '')
+                send_headers['X-Riot-Token'] = '<empty>' if not token else (token[:6] + '...' + token[-4:])
+            except Exception:
+                send_headers['X-Riot-Token'] = '<error>'
+            logger.info("Diagnostic request to %s%s headers=%s", platform, path, send_headers)
+            # For the actual send, include the real token in a separate dict
+            real_headers = dict(headers)
+            conn.request('GET', path, headers=real_headers)
+            resp = conn.getresponse()
+            body = resp.read().decode('utf-8', errors='ignore')
+            logger.info("Diagnostic response status=%s reason=%s", resp.status, resp.reason)
+            logger.info("Diagnostic response headers: %s", dict(resp.getheaders()))
+            logger.info("Diagnostic response body: %s", body[:2000])
+            conn.close()
+        except Exception as e:
+            logger.exception("Diagnostic request failed: %s", e)
+
+    await asyncio.to_thread(_diagnostic_summoner_call)
+
     # Intentamos cargar el invocador y, si falla (por clave vacía o error temporal), reintentamos periódicamente
     summoner = await fetch_summoner(platform, headers)
     while summoner is None:
@@ -486,15 +522,19 @@ async def riot_poll_loop(state: BotState, templates):
 async def fetch_summoner(platform, headers):
     encoded_name = urllib.parse.quote(SUMMONER_NAME)
     url = f"https://{platform}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{encoded_name}"
+    # Log request details with masked API key for troubleshooting
     try:
+        masked_headers = dict(headers or {})
+        if 'X-Riot-Token' in masked_headers:
+            token = masked_headers['X-Riot-Token']
+            try:
+                masked_headers['X-Riot-Token'] = '<empty>' if not token else (token[:6] + '...' + token[-4:])
+            except Exception:
+                masked_headers['X-Riot-Token'] = '<error>'
+        logger.debug("fetch_summoner url=%s headers=%s", url, masked_headers)
         return await fetch_json(url, headers)
     except Exception as exc:
-        logger.exception(
-            "Error al buscar invocador Riot %s en %s: %s",
-            SUMMONER_NAME,
-            platform,
-            exc,
-        )
+        logger.exception("Error al buscar invocador Riot %s en %s: %s", SUMMONER_NAME, platform, exc)
         return None
 
 
