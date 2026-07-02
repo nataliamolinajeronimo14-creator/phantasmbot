@@ -51,7 +51,7 @@ PLATFORM_TO_ROUTE = {
     "tr1": "europe",
 }
 
-CHAT_RE = re.compile(r"^:([^!]+)!.* PRIVMSG #[^ ]+ :(.+)$")
+CHAT_RE = re.compile(r"^(?:@[^ ]+ )?:([^!]+)!.* PRIVMSG #[^ ]+ :(.+)$")
 LOUIS_RESULT_RE = re.compile(r"\b(Win|Loss|Lose|Lost)\b", re.IGNORECASE)
 
 
@@ -723,7 +723,6 @@ async def main():
     logger.info("Conectado a Twitch IRC como %s y unido al canal #%s", TWITCH_USER, TWITCH_CHANNEL)
 
     state = BotState(templates)
-    state.chat_send_queue.put_nowait("Bot conectado y listo para rastrear rachas.")
 
     tasks = [
         asyncio.create_task(read_chat_loop(reader, writer, state)),
