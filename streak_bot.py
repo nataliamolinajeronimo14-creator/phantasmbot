@@ -49,7 +49,7 @@ LOUIS_RESULT_RE = re.compile(r"\b(Win|Loss|Lose|Lost)\b", re.IGNORECASE)
 
 
 class BotState:
-    def __init__(self):
+    def __init__(self, templates=None):
         self.current_streak_type = None
         self.current_streak_count = 0
         self.last_match_id = None
@@ -60,10 +60,20 @@ class BotState:
         self.pending_louis_event = None
         self.last_ranked_lp = {}
         self.last_ranked_queue = None
+        self.templates = templates or {}
 
     def format_active_streak(self):
         if not self.current_streak_type or self.current_streak_count == 0:
-            return "No streak active."
+            return "Waiting for a streak Bro"
+        
+        # Obtener el mensaje personalizado del JSON
+        category = f"{self.current_streak_type}_streak"
+        message = choose_template(self.templates, category, self.current_streak_count)
+        
+        if message:
+            return message
+        
+        # Fallback si no hay template personalizado
         suffix = "W" if self.current_streak_type == "win" else "L"
         return f"Current streak: {self.current_streak_count}{suffix}"
 
@@ -474,7 +484,7 @@ async def main():
     await send_irc_line(writer, f"NICK {TWITCH_USER}")
     await send_irc_line(writer, f"JOIN #{TWITCH_CHANNEL}")
 
-    state = BotState()
+    state = BotState(templates)
     state.chat_send_queue.put_nowait("Bot conectado y listo para rastrear rachas.")
 
     tasks = [
