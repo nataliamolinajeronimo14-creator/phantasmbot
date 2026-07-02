@@ -97,7 +97,8 @@ logger = logging.getLogger("streak_bot")
 
 def load_streak_templates(path: Path):
     if not path.exists():
-        raise FileNotFoundError(f"No se encontró {path}")
+        logger.warning("No se encontró %s — usando plantillas vacías", path)
+        return {}
 
     if path.suffix.lower() == ".json":
         import json
@@ -151,9 +152,13 @@ def choose_template(templates, category, streak):
 
 def get_routing_region(platform: str):
     platform = platform.lower()
-    if platform not in PLATFORM_TO_ROUTE:
-        raise ValueError(f"Plataforma Riot desconocida: {platform}")
-    return PLATFORM_TO_ROUTE[platform]
+    # Si ya nos pasan la ruta de routing (e.g. "europe", "americas", "asia"), aceptarla.
+    routes = set(PLATFORM_TO_ROUTE.values())
+    if platform in routes:
+        return platform
+    if platform in PLATFORM_TO_ROUTE:
+        return PLATFORM_TO_ROUTE[platform]
+    raise ValueError(f"Plataforma Riot desconocida: {platform}")
 
 
 def http_get_json(url: str, headers=None):
@@ -348,11 +353,9 @@ async def handle_privmsg(state: BotState, nick: str, message: str):
         else:
             return
 
-            state.pending_louis_event = {"result": result, "seen_at": time.monotonic()}
-            logger.info("Evento Louis detectado: %s", result)
-            await try_send_pending_streak(state)
-
-
+        state.pending_louis_event = {"result": result, "seen_at": time.monotonic()}
+        logger.info("Evento Louis detectado: %s", result)
+        await try_send_pending_streak(state)
 async def try_send_pending_streak(state: BotState, force_send=False):
     if not state.pending_match_result:
         return
@@ -445,14 +448,14 @@ async def riot_poll_loop(state: BotState, templates):
 
                 previous_type = state.current_streak_type
                 previous_count = state.current_streak_count
-                state.current_streak_type = result
-                state.current_streak_count = previous_count + 1 if previous_type == result else 1
-                messages = build_streak_messages(
+                new_count, messages = build_streak_messages(
                     templates,
                     previous_type,
                     previous_count,
                     result,
-                )[1]
+                )
+                state.current_streak_type = result
+                state.current_streak_count = new_count
                 state.pending_match_result = {
                     "match_id": match_id,
                     "result": result,
