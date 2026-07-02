@@ -9,10 +9,10 @@ from pathlib import Path
 # Configuración básica: actualiza estos valores o exporta variables de entorno.
 TWITCH_USER = os.getenv("TWITCH_USER", "NoPhantasm")
 TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny4a0nhpmfy0")
-TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__").lstrip("#")
+TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Phantasm__")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
-SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "eyes on me")
-SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#2026")
+SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm")
+SUMMONER_TAG = os.getenv("SUMMONER_TAG", "#TWTV1")
 if "#" in SUMMONER_NAME_RAW:
     SUMMONER_NAME, SUMMONER_TAG = SUMMONER_NAME_RAW.split("#", 1)
 else:
