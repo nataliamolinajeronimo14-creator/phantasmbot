@@ -14,7 +14,7 @@ import logging
 # Configuración básica: actualiza estos valores o exporta variables de entorno.
 TWITCH_USER = os.getenv("TWITCH_USER", "NoPhantasm")
 TWITCH_OAUTH_TOKEN = os.getenv("TWITCH_OAUTH_TOKEN", "oauth:2p52g2gvdclhzky31mny4a0nhpmfy0")
-TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "Ruben_IRPG").lstrip("#")
+TWITCH_CHANNEL = os.getenv("TWITCH_CHANNEL", "RubenIRPG").lstrip("#")
 TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID", "gp762nuuoqcoxypju8c569th9wz7q5")
 RIOT_API_KEY = os.getenv("RIOT_API_KEY", "RGAPI-fceb4641-b051-4bef-8e5c-17d1710dbbfa")
 SUMMONER_NAME_RAW = os.getenv("SUMMONER_NAME", "Phantasm#TWTV0")
@@ -23,6 +23,7 @@ if "#" in SUMMONER_NAME_RAW:
     SUMMONER_NAME, SUMMONER_TAG = SUMMONER_NAME_RAW.split("#", 1)
 else:
     SUMMONER_NAME = SUMMONER_NAME_RAW
+ 
 REGION = os.getenv("REGION", "EUW1")
 SLEEP_IN_GAME = int(os.getenv("SLEEP_IN_GAME", "10"))
 SLEEP_OUT_GAME = int(os.getenv("SLEEP_OUT_GAME", "5"))
@@ -347,9 +348,9 @@ async def handle_privmsg(state: BotState, nick: str, message: str):
         else:
             return
 
-        state.pending_louis_event = {"result": result, "seen_at": time.monotonic()}
-        logger.info("Evento Louis detectado: %s", result)
-        await try_send_pending_streak(state)
+            state.pending_louis_event = {"result": result, "seen_at": time.monotonic()}
+            logger.info("Evento Louis detectado: %s", result)
+            await try_send_pending_streak(state)
 
 
 async def try_send_pending_streak(state: BotState, force_send=False):
